@@ -1,0 +1,700 @@
+---
+title: "Final report STA207"
+author: "Haojian Li"
+date: "3/16/2025"
+output:
+  html_document:
+    df_print: paged
+    number_sections: yes
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,     
+  warning = FALSE,  
+  message = FALSE   
+)
+```
+
+
+# Introduction of the dataset
+
+The Tennessee Student/Teacher Achievement Ratio study (known as Project STAR) was conducted in the late 1980s to assess the impact of class size on test scores.  This dataset has served as a classic example in numerous textbooks and research papers.  The Project STAR public access data set includes test scores, treatment groups, and student and teacher characteristics from the experiment's four years, from 1985-1986 to 1988-1989.  The test scores analyzed in this chapter are the sum of the Stanford Achievement Test's math and reading portions.
+
+
+In this study, we focused on whether the experiment of class size effect the math scaled scores of the first grade. The research was consist of three parts: Descriptive analysis, inferential anslysis and sensitivity analysis.
+
+
+# Background
+
+Project STAR (Student/Teacher Achievement Ratio) conducted in 1985 as a educational experiment tracking students from kindergarten to third grade in 79 Tennessee schools. The study random assigned to place both students and teachers in three different classroom environments: small classes (13-17 students), regular classes (22-25 students), and regular classes with a teaching assistant (22-25 students).  Researchers aimed to evaluate the long-term effects of class size on educational outcomes by consistently implementing the class size categories for four years.
+
+This study tested first-year math scores from the Project STAR dataset to figure out how class size predict academic achievement. The data was avaliable to the public from Harvard Dataverse. The primary hypothesis suggesting that different classroom settings significantly affect first-grade math grade. Further analysis will identify which classroom size have continuous effect on students grade in the following years
+
+In this study, the classroom serves as the central unit of analysis, with various factors were used to assess their collective impact on math grade. This study aims to establish direct Project STAR (Student/Teacher Achievement Ratio) conducted in 1985 as a educational experiment tracking students from kindergarten to third grade in 79 Tennessee schools. The study random assigned to place both students and teachers in three different classroom environments: small classes (13-17 students), regular classes (22-25 students), and regular classes with a teaching assistant (22-25 students).  Researchers aimed to evaluate the long-term effects of class size on educational outcomes by consistently implementing the class size categories for four years.
+
+This study tested first-year math scores from the Project STAR dataset to figure out how class size predict academic achievement. The data was avaliable to the public from Harvard Dataverse. The primary hypothesis suggesting that different classroom settings significantly affect first-grade math grade. Further analysis will identify which classroom size have continuous effect on students grade in the following years
+
+In this study, the classroom serves as the central unit of analysis, with various factors were used to assess their collective impact on math grade. This study aims to establish direct causal relationships by capturing demographic variables and other confoundng variables that may influence student performance. The final purpose is to provide evidence-based insights for educational policymakers and practitioners about the influence of class size, classroom composition, and school environment on academic performance of different students, supporting related law and descision-making process.
+
+
+# Experimental design
+
+The STAR Project studied whether class size significantly impacts educational outcomes. Students were randomly assigned to three conditions: small classes (13-17 students), regular classes (22-25 students), or regular classes with a teaching aide (22-25 students). This randomization aimed to reduce selection bias by building direct relationship between experimental outcome and class size. The study also kept similar class size from kindergarten through third grade to ensure the continuity of the study. STAR collected comprehensive data including academic performance outcome and non-academic factors like attendance and engagement, while also considering demographic variables, teacher patterns, and school contexts for potential confounding factors.
+
+Some major flows appears in this experimental design. One is Project STAR used discrete class size categories rather than considering treating class size as continuous variable. This categorical approach creates strange artificial boundaries and fails to capture potential effects in the middle of excluded range (17-22 students). And the designer of this experiment should explain more about the justification for why 13-17 students can consider as small class but not setting the class size even more smaller or higher, is there evidence proving that?  Another flow is the study's longitudinal design, while very interesting, suffered from student mobility issues. The mobility issue of participants might introduced systematic biases since students who remained in the study for its duration may differ fundamentally from those who left, potentially skewing results.
+
+The study's randomization also raised questions. Complete randomization of students didn't consider the demographic patterns of the area, which reduced the external validity and generalizability.
+
+In conclusion, while Project STAR project builds direct causal relationship between class size and study outocmes, its experimental design have limitations and its results should be interpreted in caution. 
+
+
+# Descriptive analysis 
+
+Because we are using the full version of STAR dataset this time, we need to redo the descriptive analysis
+ 
+```{r, echo = FALSE, results = 'hide', warning = FALSE, message = FALSE}
+library(tidyverse)
+library(psych)
+library(haven)
+library(broom)
+library(gplots)
+library(lme4)
+library(car)
+
+STAR <- read_sav("STAR_Students.sav")
+
+
+first_grade <- STAR[, c(1:6,8,27,50,55:81)]
+
+#filter out students who took part in the research
+first_grade<- first_grade %>%
+              filter(FLAGSG1 == 1)       
+
+
+# Categorical variable preparation
+first_grade <- suppressWarnings(first_grade %>%
+  mutate(across(c(race, gender, g1freelunch, g1surban, g1tgen, 
+                  g1thighdegree, g1trace, g1tcareer, g1classtype, g1schid), as.factor)) %>%
+  mutate(
+    race = factor(race, levels = c("1", "2", "3", "4", "5", "6"), labels = c("White", "Black", "Asian", "Hispanic", "Native American", "Other")),
+    gender = factor(gender, levels = c("1", "2"), labels = c("Male", "Female")),
+    g1surban = factor(g1surban, levels = c("1", "2", "3", "4"), labels = c("Inner City", "Suburban", "Rural", "Urban")),
+    g1freelunch = factor(g1freelunch, levels = c("1", "2"), labels = c("Free-lunch", "Non-free lunch")),
+    g1classtype = factor(g1classtype, levels = c("1", "2", "3"), labels = c("Small", "Regular", "Regular_Aid"))
+  ))
+
+```
+
+
+
+This descriptive statistics include the categorical variables of interest, mainly gender, race, class type, whether have free lunch and the location of school.
+
+Also with the dependent varibale, I chose the total grade of first year math and first year reading because I think this two grades can well-reflect the study ability of the student.
+
+```{r warning=F}
+
+first_grade %>%
+  select(gender, race, g1schid) %>%
+  summary()
+
+cat("\n")  
+
+
+first_grade %>%
+  select(g1classtype, g1freelunch, g1surban) %>%
+  summary()
+
+
+first_grade %>%
+  filter(!is.na(g1treadss) & !is.na(g1tmathss) ) %>%
+  summarize(meang1treadss=mean(g1treadss), sdg1treadss=sd(g1treadss), meang1tmathss=mean(g1tmathss), sdg1tmathss=sd(g1tmathss) )
+
+
+```
+
+
+As the primary question of interest in this study is whether there are any differences in math scaled scores in 1st grade across class types (class size and school differences), our variables of interest would be g1classtype, which represented the class type of 1st year students; and our dependent variable would be g1tmathss, which represented the math grade of first year students.
+
+Here's graphical representation of the categorical variables of interest.
+
+```{r}
+
+first_grade %>%
+  count(g1classtype) %>%
+  mutate(prop = n / sum(n) * 100,  
+         label = paste0(n, " (", round(prop, 1), "%)")) %>%  
+  ggplot(aes(x = "", y = n, fill = g1classtype)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label), position = position_stack(vjust = 0.7)) + 
+  labs(title = "Class type Proportion") +
+  theme_minimal() 
+
+first_grade %>%
+  count(gender) %>%
+  mutate(prop = n / sum(n) * 100,  
+         label = paste0(n, " (", round(prop, 1), "%)")) %>%  
+  ggplot(aes(x = "", y = n, fill = gender)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label), position = position_stack(vjust = 0.7)) + 
+  labs(title = "Gender Distribution of Participant") +
+  theme_minimal() 
+
+
+first_grade %>%
+  count(race) %>%
+  mutate(prop = n / sum(n) * 100,  
+        label = ifelse(race %in% c("Black", "White"), paste0(n, " (", round(prop, 1), "%)"), "")) %>%
+  ggplot(aes(x = "", y = n, fill = race)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label), position = position_stack(vjust = 0.7)) + 
+  labs(title = "Race of Participant") +
+  theme_minimal() 
+
+
+
+first_grade %>%
+  count(g1freelunch) %>%
+  mutate(prop = n / sum(n) * 100,  
+         label = paste0(n, " (", round(prop, 1), "%)")) %>%  
+  ggplot(aes(x = "", y = n, fill = g1freelunch)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label), position = position_stack(vjust = 0.7)) + 
+  labs(title = "Free lunch Proportion") +
+  theme_minimal() 
+
+first_grade %>%
+  count(g1surban) %>%
+  mutate(prop = n / sum(n) * 100,  
+         label = paste0(n, " (", round(prop, 1), "%)")) %>%  
+  ggplot(aes(x = "", y = n, fill = g1surban)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label), position = position_stack(vjust = 0.4)) + 
+  labs(title = "School location Proportion") +
+  theme_minimal() 
+
+```
+
+As we are interested in how the class type influencing the first year math grade, we conducted a main effect test to discover how first year math grade changed by class size
+
+
+```{r}
+first_grade %>%
+  pivot_longer(cols = c(g1tmathss), names_to = "subject", values_to = "score") %>%
+  ggplot(mapping = aes(x = g1classtype, y = score, fill=g1classtype)) +
+  geom_boxplot(na.rm = TRUE)+
+  theme_minimal()+ 
+  labs(title = "Main effect of Class Type on first year Math Score") +
+  facet_wrap(~subject, scales="free_y")
+
+plotmeans(g1tmathss~g1classtype,data=first_grade,xlab="Class size",ylab="Math score",
+          main="1st year students math score by class size",cex.lab=1.5) 
+```
+
+
+
+
+As school id is also another concerning variables in our preliminary analysis report, we also need to take a look of how first year math grade changed by school id.
+
+Here's the graph of math grade vs school_id. From the graph we can see that the differences on school have huge impact on the STA math score.
+
+```{r }
+first_grade %>%
+  group_by(g1schid) %>%
+  summarize(mathmean=mean(g1tmathss,na.rm=TRUE)) %>%
+  ggplot(mapping = aes(x = as.numeric(g1schid), y = mathmean)) +
+  geom_line(na.rm = TRUE)+
+  geom_point(size = 2, color = "black") +
+  ylim(475, 600) + 
+  theme_minimal()+ 
+  labs(title = "Main effect of School ID on first year Math Score",
+       x = "School ID",
+       y = "Mean first year Math Score") 
+
+  
+```
+
+
+# Missing value handeling
+
+One important caveats we haven't take into through consideration is about handling the missing values. Previously, we simply getting rid of all the missing value, which is problematic because we didn't take into consideration of the patterns within the missing value. Thus, we need to take more careful look of how to handle the missing value. 
+
+To look into missing value, we first need to know where are our missing values coming from. Currently we have several categorical variable of interest, which includes gender, race, school location, class type, free lunch and one dependent continuous variable of interest total first year math score. Here's the proportion of NA for these several values:
+
+```{r}
+
+
+na_frequency <- first_grade %>%
+  select(gender, race, g1schid, g1classtype, g1freelunch, g1surban, g1tmathss) %>%
+  summarise_all(~ sum(is.na(.))) %>%
+  pivot_longer(cols = everything(), names_to = "variable", values_to = "na_count")
+
+
+
+ggplot(na_frequency, aes(x = reorder(variable, -na_count), y = na_count, fill = variable)) +
+  geom_col() +
+  labs(title = "NA Frequency in variables of interest", x = "Variable", y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_fill_viridis_d(option = "C", direction = -1) 
+
+```
+
+We can see that for all the categorical variables except free lunch, the number of NA is extremely small (13 for gender and 29 for race) comparing the total sample size of 6829. So it would be convenient to just delete the rows with missing value for race and gender. For the free lunch, NA numbers are a little higher (around 179), but still can consider as extremely small comparing with the total sample size of 6289. More importantly, as it is extremely hard to predict the missing value statistically for categorical variables, it would be better to just cutting off the rows with missing values for the categorical variables.
+
+After cleaning the NA values of categorical variables, we figure out that we still have 189 NA values for the math first year scores, which counts for around 3% of the total sample. To handle these NA values, a common practice to replace NA with the median, called median imputation. 
+
+
+```{r}
+filtered_rows <- first_grade %>%
+  filter(if_all(c(gender, race, g1schid, g1classtype, g1freelunch, g1surban), ~ !is.na(.)))
+
+
+filtered_rows <- filtered_rows %>%
+  mutate(g1tmathss = ifelse(is.na(g1tmathss), median(g1tmathss, na.rm = TRUE), g1tmathss))
+
+filtered_rows %>%
+  select(g1tmathss) %>%
+  summarise_all(~ sum(is.na(.))) 
+```
+
+
+# Inferential analysis 
+
+The primary question of interest in this study is whether there is any differences in math scaled scores in 1st grade across class types (class size and school id), and if so, a secondary question of interest is which class type is associated with the highest math scaled scores in 1st grade. To address these two problems, a two-way ANOVA model in additive form were fitted as follows: 
+
+
+\[
+Y_{ijk} = \mu_{} + \alpha_{i} + \beta_{j} + \epsilon_{ijk}
+\]
+
+**Parameters:**  
+
+- \( i \): levels of class type, fixed effect, \( i = 1, 2, 3 \)  
+
+- \( j \): levels of school ID, random effect, \( j = 1, 2, \dots, 76 \)  
+
+- \( k \): representing number of subjects for each class type within each school, \( k = 1, 2, \dots, n_{ij} \)  
+
+- \( Y_{ijk} \): first year math score of the \( k \)th student in the \( i \)th class type within the \( j \)th school  
+
+- \( \mu_{} \): Overall average math score across all class types and schools  
+
+**Constraints:**  
+
+- \( \alpha_{i} \): The fixed effect of the \( i \)th class type on the math score,  
+\[
+\sum_{i=1}^{I} \alpha_{i} = 0
+\]  
+
+- \( \beta_{j} \): The random effect of the \( j \)th school on the math score, capturing variations due to schools.  
+\[
+\beta_{j} \sim N(0, \sigma_{\beta}^{2})
+\]  
+
+- \( \epsilon_{ijk} \): Random error term,  
+\[
+\epsilon_{ijk} \sim N(0, \sigma^{2})
+\]  
+
+
+
+## Assumptions and model hypothesis
+
+To fit a two-way anova model, several general assumptions must be made:
+
+Independent of observations
+$$ \epsilon_{ijk} \text{ are independent for all } i, j, k. $$
+
+Homoscedasticity
+$$ \text{Var}(\epsilon_{ijk}) = \sigma^2 \quad \forall \quad i, j, k. $$
+
+Normality of residuals
+$$ \epsilon_{ijk} \sim \mathcal{N}(0, \sigma^2). $$
+
+No interaction term, but we are going to test whether we really have a interaction term or not.
+$$ H_0: (\alpha\beta)_{ij} = 0 \quad \forall i, j. $$
+
+No multicollinearity
+$$ \text{Cor}(\alpha_i, \beta_j) \approx 0. $$
+
+
+The hypothesis of the F-test listed here. Alpha represented the main effect from class size, beta represented the main effect from school indicator, alpha-beta represented the interaction effect between class size and school indicator.
+
+For the main effect of class type:
+
+$$ H_0: \alpha_i = 0 \ \forall i \quad  \quad H_1: \text{not all } \alpha_i \text{ are zero.} $$
+
+For the main effect of school indicator:
+
+$$ H_0: \beta_j = 0 \ \forall j \quad  \quad H_1: \text{not all } \beta_j \text{ are zero.} $$
+
+For now we haven't discuss the possibility of having an interaction term, so in case the interaction term really exist, we need to write down the hypothesis here: 
+
+$$ H_0: (\alpha \beta)_{ij} = 0 \ \forall i, j \quad v.s. \quad H_1: \text{not all } (\alpha \beta)_{ij} \text{ are zero.} $$
+
+To figure out whether the interaction effect exist, this study compared between reduced model and full model:
+
+
+Reduced model: \( Y_{ijk} = \mu_{\cdot} + \alpha_i + \beta_j + \epsilon_{ijk} \)
+Full model: \( Y_{ijk} = \mu_{\cdot} + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \epsilon_{ijk} \)
+
+The significant level of all below tests is $$p<.05$$. 
+
+
+
+## ANOVA Test results:
+
+
+```{r, message=FALSE}
+
+summary_data <- filtered_rows %>%
+  group_by(g1tchid, g1classtype, g1classsize, g1schid, g1surban) %>%
+  summarise(
+    mean = mean(g1tmathss, na.rm = TRUE), 
+    median = median(g1tmathss, na.rm = TRUE))
+
+reduced_model <- lm(median ~ g1schid + g1classtype, data = summary_data)
+full_model <- lm(median ~ g1schid + g1classtype + g1classtype*g1schid, data = summary_data)
+
+anova_reduced<-anova(reduced_model)
+
+anova_reduced
+
+anova_full_model <-anova(full_model)
+
+anova_full_model
+
+
+
+anova_result <- anova(reduced_model,full_model, test = "F")
+
+anova_result
+```
+
+
+The reduced model, which included only the main effects, showed a significant main effect of class size, with an F(2, 259)= 18.58,  p<.001. Similarly, the main effect of school id was significant, with an F(75, 259)=6.09, p< .001. These results suggested that both class size and school id independently influence math1 scores.
+
+The full model included an interaction term (class size × school id) in addition to the main effects. The results indicated that the main effects remained significant. Class size had an F(2,114)= 18.68, p<.001. School id had an F(75,114)=6.12,  p< .001. Importantly, the interaction between class size and school id was not significant, F(145,114)=1.01,p >.05. This indicates that the effect of class size on 1st year math grade scores was not depends on school id, which means the interaction term was not exist. 
+
+To verify whether the interaction term really not significant, a F-test between the full model and reduced model was conducted. The F test results showed that adding interaction term not significantly improved the model, F(145, 114)= 1.01,p>.05.H0 for the interaction effect was not rejected.
+
+In conclusion, class size and school id have significant influence to the math score of the first year students.
+
+
+To test  which class type was associated with the highest math scaled scores in 1st grade, Tukey's HSD test was applied here.
+
+```{r}
+library(stats)
+anova_reduced_model <- aov(median ~ g1schid + g1classtype, data = summary_data)
+tukey_results <- TukeyHSD(anova_reduced_model, "g1classtype")
+plot(tukey_results,col="brown")
+print(tukey_results)
+
+```
+
+
+A Tukey’s HSD test was conducted to examine pairwise differences between levels of class size on 1st year math scores of students following a significant main effect in the ANOVA. The results indicated a significant difference between the grade of  small and regular class size, with regular class significantly lower than small class. mean difference of 11.48, a 95% confidence interval ranging from -16.75 to -6.21, and an adjusted p-value of < .001. Also, there're a significant differences between the regular+aide with small class size, which regular aid class significantly lower than small class, with a mean difference of -11.94, a 95% confidence interval ranging from -17.43 to -6.44, and an adjusted p-value of < .001.The regular aid group did not have significant differences with the regular group.
+
+Since the confidence interval did not include zero and the p-value was significant, this result suggested that students in the small size class had significantly higher math scores compared to those in the regular group or regular group with aide. In conclusion, smaller classes yielding better math outcomes for 1st year students.
+
+
+To assess whether the model violates the fundamental assumptions of ANOVA, this study examined the residuals vs. fitted plot and the Q-Q plot. The residuals vs. fitted plot was used to evaluate homoscedasticity. If residuals were randomly scattered without a discernible pattern, homoscedasticity assumption was considered satisfied. From the plot, we observed the residuals does not have structured pattern. The Q-Q plot was used to assess the normality of residuals. In the analysis, the plot indicated a slight skewness, but it remained within an acceptable range, suggesting that the normality assumption was approximately satisfied.
+
+```{r warning=F}
+options(repr.plot.width=15, repr.plot.height=6)
+par(mfrow=c(1,2))
+plot(anova_reduced_model,cex.lab=1.2,which=1:2)
+
+```
+
+
+# Potential Caveats of Two-way ANOVA model
+
+## Caveat 1: failed to consider the demographic variables
+
+Apart from the null values, another caveat of the initial analysis report is the failure to consider demographic variables. Since we only fitted a two-way ANOVA model, we did not account for the effect of demographic variables. However, it is reasonable to expect that demographic factors could influence students' grades, especially variables like free lunch, which implies family income. For example, students from wealthier families tend to receive more educational investment and social support from their families, leading to better math grades. However, we lack evidence to confirm whether demographic variables significantly affect outcomes in the STAR dataset. If they do not, excluding them would not be a major issue.
+
+To assess whether demographic variables matter, we conducted a main effect test of demographic variables on first-year math grades. The boxplots and main effect plot for class type and first-year math scores are presented below
+
+
+```{r,warning=F}
+
+first_grade %>%
+  pivot_longer(cols = c(g1tmathss), names_to = "subject", values_to = "score") %>%
+  ggplot(mapping = aes(x = race, y = score, fill=gender)) +
+  geom_boxplot(na.rm = TRUE)+
+  theme_minimal()+ 
+  labs(title = "Main effect of Gender and Race on first year Math Score") +
+  facet_wrap(~subject, scales="free_y")
+
+
+first_grade %>%
+  pivot_longer(cols = c(g1tmathss), names_to = "subject", values_to = "score") %>%
+  ggplot(mapping = aes(x = g1freelunch, y = score, fill=g1freelunch)) +
+  geom_boxplot(na.rm = TRUE)+
+  theme_minimal()+ 
+  labs(title = "Main effect of Free Lunch on first year Math Score") +
+  facet_wrap(~subject, scales="free_y")
+
+first_grade %>%
+  pivot_longer(cols = c(g1tmathss), names_to = "subject", values_to = "score") %>%
+  ggplot(mapping = aes(x = g1surban, y = score, fill=g1surban)) +
+  geom_boxplot(na.rm = TRUE)+
+  theme_minimal()+ 
+  labs(title = "Main effect of School Location on first year Math Score") +
+  facet_wrap(~subject, scales="free_y")
+
+
+
+
+plotmeans(g1tmathss~gender,data=first_grade,xlab="Gender",ylab="Math score",
+          main="1st year students math score by gender",cex.lab=1.5) 
+
+plotmeans(g1tmathss~race,data=first_grade,xlab="Race",ylab="Math score",
+          main="1st year students math score by race",cex.lab=1.5) 
+
+plotmeans(g1tmathss~g1freelunch,data=first_grade,xlab="Free lunch",ylab="Math score",
+          main="1st year students math score by free lunch",cex.lab=1.5) 
+
+plotmeans(g1tmathss~g1surban,data=first_grade,xlab="School location",ylab="Math score",
+          main="1st year students math score by school location",cex.lab=1.5) 
+
+```
+
+From the graph, we can roughly speaking that demographic variables seems played an important part in predicting the 1st year math grade. So it is necessary to consider the effect from demographic variables.
+
+
+## Caveat 2: haven't consider the effect from teachers
+
+One important factor to consider is the ability of teachers. Teachers may vary significantly in their teaching style, professional attitude, and level of responsibility, which can have a huge influence on student outcomes. These individual differences among teachers may also overlap with other factors. For example, schools in inner cities may have less experienced or less capable teachers because they face financial shortage and cannot afford the salary of experiences teachers. Due to significant influence of teachers, we need to highlight this as a caveat and control for teacher effects to avoid compromising the validity of our findings. After all, our main research question focuses on the effect of class size.
+
+Currently, we lack evidence on how teachers may affect students' math grades. Therefore, we need to determine whether there is significant variation in teaching outcomes among teachers in our dataset.
+
+```{r}
+
+
+first_grade %>%
+  group_by(g1tchid) %>%
+  summarize(mathmean = mean(g1tmathss, na.rm = TRUE)) %>%
+  mutate(mathmean_range = cut(mathmean, breaks = seq(475, 600, by = 5))) %>%
+  group_by(mathmean_range) %>%
+  summarize(unique_g1tchid_count = n()) %>%
+  ggplot(aes(x = mathmean_range, y = unique_g1tchid_count)) +
+  geom_col(fill = "darkblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Average 1st year math score by different teachers",
+       x = "Average score of students",
+       y = "Number of teachers") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+From the results above, we calculated the average score of each teacher's students and measured the range of these mean scores. The mean scores ranged from 480 to 600—a substantial variation of nearly 120 points in average math scores. This suggests that individual teacher factors play a highly significant role in students' math outcomes and should be addressed in our model.
+
+
+## Caveat 3: should consider the factor of students' intelligence
+
+Individual differences also need to be considered when building the model. We have already handled several demographic variables, such as gender and race, to address individual differences. However, a more fundamental factor is intelligence, which is a key determinant of a student’s ability to absorb the knowledge taught by teachers. Although the knowledge covered in first-year primary school is very simple, many students may still struggle to keep up with the pace of instruction. Therefore, it is still important to consider the intelligence factors in our study.
+
+Unfortunately, we do not have IQ data in our dataset. However, we could use another variable as a proxy for intelligence: math grades in kindergarten. Since most kindergarten students do not prepare for exams, their kindergarten math grades are likely to reflect their initial intelligence level.
+
+```{r}
+
+first_grade %>%
+  group_by(stdntid) %>%
+  summarize(mathmean = mean(gktmathss, na.rm = TRUE)) %>%
+  mutate(mathmean_range = cut(mathmean, breaks = seq(475, 600, by = 5))) %>%
+  filter(!is.na(mathmean_range)) %>%  
+  group_by(mathmean_range) %>%
+  summarize(unique_g1tchid_count = n()) %>%
+  ggplot(aes(x = mathmean_range, y = unique_g1tchid_count)) +
+  geom_col(fill = "darkblue", color = "black") +
+  theme_minimal() +
+  labs(title = "Kindergarten math score",
+       x = "Average score of students",
+       y = "Number of students") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+The results show that kindergarten math scores ranged from 475 to 580, which is a substantial variation. This suggests that intelligence exhibits significant individual differences and should be addressed in our model.
+
+# Fixing the caveats: linear mixed model with teachers' id
+
+We can address the teacher's issue by applying a linear mixed model, which is presented below. Since we already tested the school ID in the ANOVA model, we will exclude it from the linear mixed model and instead focus on the demographic variables. And the reason why we need to treat teachers as random variable not fixed factors is because three classes types were selected for the study but the number of teacher was far more than class types and the teachers were randomly assigned to the classes. This teacher selection process indicates that the specific levels of teachers are unknown, so we need to treat teachers as random factor.
+
+Applying the linear mixed model, our model should be written as the following:
+
+
+\[
+Y_{ijklm} = \mu + \alpha_i + \beta_j + \gamma_k + \delta_l + \eta_m + \epsilon_{ijklm}
+\]
+
+Terms:  
+- \( i \): class type, fixed effect \( i = 1, 2, 3 \)  
+- \( j \): teacher's id, random effect \( j = 1, 2, \dots, 337 \)  
+- \( k \): level of race, fixed effect  
+- \( l \): level of school location, fixed effect  
+- \( m \): level of free-lunch, fixed effect  
+- \( n_{ijklm} \): number of observations for each combination of class type, teacher's id, race, school location, and free-lunch  
+- \( Y_{ijklm} \): The math score for the \( m \)th student in the \( i \)th class type within the \( j \)th teacher, \( k \)th race, \( l \)th school location, and \( m \)th level of free-lunch.  
+- \( \mu \): Overall average math score across all class types, teacher, races, school location levels, and free-lunch levels.  
+
+Effects:  
+- \( \alpha_i \): The fixed effect of the \( i \)th class type on the math score, representing the differential effect of class types on math scores.  
+- \( \beta_j \): The random effect of the \( j \)th teacher on the math score, capturing variations due to schools.  
+\[
+\beta_j \sim N(0, \sigma_{\beta}^{2})
+\]  
+- \( \gamma_k \): The fixed effect of the \( k \)th race (ratio of black students) on the math score  
+- \( \eta_m \): The fixed effect of the \( m \)th level of free-lunch on the math score  
+- \( \delta_l \): The fixed effect of the \( l \)th level of school location on the math score  
+- \( \epsilon_{ijklm} \): Random error term,  
+\[
+\epsilon_{ijklm} \sim N(0, \sigma^{2})
+\]  
+
+Also, \( \beta_j \) and \( \epsilon_{ijklm} \) are assumed to be mutually independent.
+
+
+
+Let's run the model
+
+```{r, message=FALSE}
+summary_data_new <- filtered_rows %>%
+  group_by(g1tchid, g1classtype,  g1surban, race, gender,g1freelunch) %>%
+  summarise(
+    mean = mean(g1tmathss, na.rm = TRUE), 
+    median = median(g1tmathss, na.rm = TRUE))
+
+mixed_model <- lmer(median ~ g1classtype + race + gender + g1freelunch + g1surban + (1 | g1tchid), 
+                    data = summary_data_new)
+
+summary(mixed_model)
+
+```
+
+
+From the results, we can see that we have a huge variance of 328.8 among teachers, which means considering teachers as a random effect is quite reasonable. Interpreting the fixed effect, we can see that after controlling the variance from the teachers, class type still had a huge effect on the math outcome (t<-2). Still, the regular class had the lowest math score compared with the small class, and the regular aid class also had a much smaller math score. Race played a role in the math score, but only for African Americans (t <-10) significantly lower than white Americans. For other races, the effect is very small. Free lunch had a huge effect on the math grade, which free-lunch group was significantly lower than the non-free lunch group. But the results of school location became really weak (t<2), we can consider that the effect brought by school location was mainly the differences among teachers.
+
+To test whether our model fit with the assumption of multicolinarity, we conduct a VIF test:
+
+```{r}
+vif_model <- lm(median ~ g1classtype + g1tchid + race + gender + g1freelunch + g1surban , data = summary_data_new)
+
+
+vif_values <- vif(vif_model)
+
+print(vif_values)
+```
+
+From the data we can see there's no clear sign of multicollinearity.
+
+
+# Fixing the caveats: considering the intelligence factor
+
+As discussed above, since there are no direct measurements of intelligence, we used kindergarten math grades as an indicator. However, we encountered several issues: (1) There are too many missing values in the kindergarten math grades—specifically, 2,582 NA values. Since nearly half of the kindergarten math grades are missing, simply using them as a predictor in our previous model could introduce bias. (2) Kindergarten grades are continuous variables, and small differences in scores may not reliably indicate meaningful differences in intelligence. 
+
+Therefore, one necessary step is to categorize kindergarten math grades by ranking: students in the top 33% should be classified as "high intelligence," those in the middle 33% as "medium intelligence," and those in the bottom 33% as "low intelligence."Another necessary step is to build a new model that includes only students with recorded kindergarten math grades. Since half of the sample has missing values, using any form of imputation could significantly impact the results.
+
+
+Our model can be written as following. To avoid conflict, we used the \( \kappa_p \) to represent the intelligence factor in the model:
+
+\[
+Y_{ijklm} = \mu + \alpha_i + \kappa_p + \gamma_k + \delta_l + \eta_m + \epsilon_{ijklm}
+\]
+
+**Terms:**  
+- \( i \): class type, fixed effect \( i = 1, 2, 3 \)  
+- \( p \): intelligence, fixed effect \( j = 1, 2, 3 \)  
+- \( k \): level of race, fixed effect  
+- \( l \): level of school location, fixed effect  
+- \( m \): level of free-lunch, fixed effect  
+
+**Effects:**  
+- \( \alpha_i \): The fixed effect of the \( i \)th class type on the math score, representing the differential effect of class types on math scores.  
+- \( \kappa_p \): The fixed effect of the \( p \)th intelligence, capture the individual differences.  
+- \( \gamma_k \): The fixed effect of the \( k \)th race (ratio of black students) on the math score.  
+- \( \eta_m \): The fixed effect of the \( m \)th level of free-lunch on the math score.  
+- \( \delta_l \): The fixed effect of the \( l \)th level of school location on the math score.  
+- \( \epsilon_{ijklm} \): Random error term,  
+\[
+\epsilon_{ijklm} \sim N(0, \sigma^{2})
+\]  
+
+
+```{r}
+filtered_kind <- first_grade %>%
+  select(gender, race,  g1classtype, g1freelunch, g1surban, g1tmathss, gktmathss) %>%
+  filter(complete.cases(.))
+
+filtered_kind <- filtered_kind %>%
+  mutate(gktmathss_factor = cut(
+    gktmathss,
+    breaks = quantile(gktmathss, probs = c(0, 0.33, 0.67, 1), na.rm = TRUE),
+    labels = c("low", "medium", "high"),
+    include.lowest = TRUE
+  ))
+
+summary_data_kind <- filtered_kind %>%
+  group_by( g1classtype,  g1surban, race, gender,g1freelunch, gktmathss_factor) %>%
+  summarise(
+    mean = mean(g1tmathss, na.rm = TRUE), 
+    median = median(g1tmathss, na.rm = TRUE))
+
+model_intelligence <- lm(median ~ g1classtype + race + gender + g1freelunch + g1surban + gktmathss_factor, data = summary_data_kind)
+
+summary(model_intelligence)
+
+```
+
+Interpreting the fixed effect, we can see that after controlling the variance from the intelligence and other demographic variables, class type still had a huge effect on the math outcome, p<.001. Still, the regular class had the lowest math score compared with the small class, and the regular aid class also had a much smaller math score. Race played a role in the math score, and for African Americans (b=-10.83, t=-4.16, p<.001) significantly lower than white Americans, while Hispanic American (b=41.66, t=2.08, p<.05) and Asian American (b=18.97, t=2.69, p<.05) have slightly higher grade comparing with white american. Free lunch had a huge effect on the math grade, which free-lunch group was significantly lower than the non-free lunch group(b=13.37, t=5.37, p<.001). Suburban school(b=8.74, t=2.32, p<.05), rural schools(b=10.26, t=2.70, p<.01) and urban schools(b=8.31, t=2.12, p<.05) have slightly higher grade comparing with inner city schools. Intelligence factor have huge impact on the math grade, intelligence medium group have significantly higher grade comparing with intelligence low group (b=26.49, t=8.96, p<.001), as well as intelligence high group comparing with intelligence low group(b=48.84, t=16.06, p<.001). 
+
+To test whether our model fit with the assumption of multicolinarity, we conduct a VIF test:
+
+```{r}
+
+vif_values_2 <- vif(model_intelligence)
+
+print(vif_values_2)
+```
+
+From the data we can see there's no clear sign of multicollinearity.
+
+
+# Discusison and conclusion
+
+The anova model in inferential analysis revealed a significant positive effect of smaller class sizes on student performance within the STAR project. Several factors contribute to the benefits of reduced-size classrooms. Smaller classes may foster greater student engagement, giving the more opportunities to asking and answering questions. The classroom environment will also benefited from reduced amount of people, and fewer students per class enables closer student-teacher interactions, allowing for identification of learning difficulties and timely intervention. 
+
+Our linear mixed model and regression model adding students' intelligence  strengthened our findings of class size. Result suggest that the positive effect of reduced class size remains robust across variations in teacher ability, student intelligence levels, and demographic variables. This indicates that smaller classes benefit all students regardless of their individual capabilities, teacher quality, or demographic characteristics, which is a compelling argument for implementing class size reduction as a universal educational improvement strategy.
+
+Our analysis also showed a negative impact of free-lunch status and student performance. This factor probably serves as an indicator of the boarder social economic challenge, as low income family more likely to require free lunch welfare. Students from such environments often face severe economic constraints, leading to limited educational resources and opportunities. These conditions create barriers to quality education and hinder focus on academic pursuits, contributing to the observed decrease in performance.
+
+Interestingly, adding teachers into our model, the effects brought by school location and racial factors reduced a lot. This suggests that teacher quality is a critical determinant of student academic outcomes. The disadvantages of math grade observed in inner-city schools and Afircan american students appear largely due to limited access to highly effective teachers. This inequality stems from fiscal constraints, neighborhood safety concerns, and various socioeconomic factors that affect teacher recruitment and retention in these communities.
+
+Based on these findings, we proposal several policies recommendations. First, reducing class size can enhances student participation and improves learning outcomes. Second, increased support for economically disadvantaged students is essential. Policies should implement targeted programs and resources for low-income students and their schools. Third, facilitating cross-regional teacher exchanges by giving subsidies to experienced teachers who willing to teach in disadvantaged inner-city schools. Additionally, organizing structured opportunities for teachers to share pedagogical experiences across different school districts, which would help the spread effective teaching practices. 
+
+
+Our report has several limitations. First, we haven't compare alternative imputation methods to justify our use of median imputation when dealing with missing values.  Second, other important variables such as teacher qualifications, experience, and student attendance rates were not fully explored. Third, our additional model was limited to first-order effects, without examining interactions between variables. We will address these limitations in the future research.
+
+# Reference {-}
+
+
+Imbens, G., & Rubin, D. (2015). Stratified Randomized Experiments. In Causal Inference for Statistics, Social, and Biomedical Sciences: An Introduction (pp. 187-218). Cambridge: Cambridge University Press. doi:10.1017/CBO9781139025751.010
+
+# Session info {-}
+
+
+```{r}
+sessionInfo()
+```
